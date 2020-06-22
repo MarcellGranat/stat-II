@@ -29,26 +29,23 @@ ui <- bootstrapPage(
               min = 0
             ),
             numericInput(
+              "N_1_1",
+              "Sokasság elemszáma",
+              value = 1000,
+              min = 0
+            ),
+            numericInput(
+              "m_1_1",
+              "Mintavétel száma",
+              value = 100,
+              min = 0
+            ),
+            numericInput(
               "n_1_1",
               "Minták elemszáma",
               value = 10,
               min = 0
             ),
-            numericInput(
-              "ntraject_1_1",
-              "Mintavétel száma",
-              value = 10,
-              min = 0
-            ),
-            selectInput("plot_type_1_1", "Mintaátlagok ábrázolásának módja", c("Pontok", "Hisztogram", "Arányokat megjelenítő hisztogram"), selected = "Pontok"),
-            sliderInput(
-              "n_hist_group_1_1",
-              "Hisztogram oszlopainak száma:",
-              min = 1,
-              max = 50,
-              value = 5
-            ),
-            uiOutput("traject_select_1_1"),
             sliderInput(
               "alpha_1_1",
               "Szignifikanciaszint (%):",
@@ -61,8 +58,7 @@ ui <- bootstrapPage(
 
           mainPanel(
             tabsetPanel(
-              tabPanel("Ábra", plotOutput("plot_1_1a")),
-              tabPanel("Minták", plotOutput("plot_1_1b")),
+              tabPanel("Ábra", plotOutput("plot_1_1")),
               tabPanel(
                 "Eredmény", verbatimTextOutput("answer_1_1"),
                 tags$head(tags$style("#answer_1_1{color:black; font-size:40px;font-family: 'Helvetica Neue', Helvetica;}"))
@@ -121,6 +117,8 @@ ui <- bootstrapPage(
     ),
     navbarMenu(
       "Két és több független mintás paraméteres próbák",
+
+# ui: 3_1 = 2 sample mean -------------------------------------------------
       tabPanel(
         "Két várható érték különbségére",
         tags$head(includeCSS("styles.css")),
@@ -228,204 +226,86 @@ ui <- bootstrapPage(
 server <- function(input, output, session) {
 
   # Server: 1_1 -------------------------------------------------------------
+mat_1_1 <- reactive({
+  input$reload_1_1
+  
+  N <- input$N_1_1
+  n <- input$n_1_1
+  sigma <- input$sigma_1_1
+  m <- input$m_1_1
+  alpha <- input$alpha_1_1
+  mu <- input$mu_1_1
 
-  output$traject_select_1_1 <- renderUI({
-    sliderInput(
-      "traject_select_1_1",
-      "Megjelenítendő minta sorszáma:",
-      value = 1,
-      min = 1,
-      max = input$ntraject_1_1,
-      step = 1
+  pop <- rnorm(n = N, mean = mu, sd=sigma)
+  if (N > 1 & sigma>0) {
+    pop <- pop/var(pop)^0.5*sigma
+  }
+  pop <- pop - mean(pop) + mu
+  mat <- matrix(nrow = n, ncol = m)
+  for (i in seq(m)) {
+    mat[,i] <- sample(pop, size = n)
+  }
+  mat
+})
+
+output$plot_1_1 <- renderPlot({
+  N <- input$N_1_1
+  n <- input$n_1_1
+  sigma <- input$sigma_1_1
+  m <- input$m_1_1
+  alpha <- input$alpha_1_1
+  mu <- input$mu_1_1
+  mat <- mat_1_1()
+  
+  mat %>% data.frame() %>% gather() %>% group_by(key) %>% summarise(mu = mean(value), sigma = sd(value)) %>% 
+    mutate(
+      conf_min = mu - qnorm(1-alpha/200)*sigma/n^0.5,
+      conf_max = mu + qnorm(1-alpha/200)*sigma/n^0.5
+    ) %>% select(key, conf_min, conf_max) %>% 
+    rename(y = key) %>% 
+    gather(key = "key", value = "value", -y) %>% 
+    ggplot() +
+    geom_line(aes(y=y, x=value, color = 'Konfidencia-intervallum'), alpha = .5, size=5) +
+    geom_vline(aes(xintercept = mu, color = "Sokassági átlag"), size = 1.6) +
+    geom_point(data = mat %>% data.frame() %>% gather(), aes(x=value, y = key), size = .9) +
+    geom_point(data = mat %>% data.frame() %>% gather() %>% group_by(key) %>% summarise(value = mean(value)),
+               aes(x=value, y = key, color = "Adott minta átlaga"), size = 2) +
+    scale_color_manual(values = c("Sokassági átlag" = '#FFC730', 'Konfidencia-intervallum' = '#FF5B6B',
+                                  "Adott minta átlaga" = "#52CCBF")) +
+    labs(x = "", y="Minták") +
+    theme_minimal() + theme(
+      legend.title = element_blank(),
+      legend.position = "bottom",
+      axis.text.y = element_blank(),
+      axis.title = element_text(size = 20),
+      axis.text.x = element_text(size = 20),
+      legend.text = element_text(size = 20)
     )
-  })
-
-  random_matrix_1_1 <- reactive({
-    input$reload_1_1
-    rnorm(input$n_1_1 * input$ntraject_1_1, mean = input$mu_1_1, sd = input$sigma_1_1) %>%
-      matrix(nrow = input$n_1_1, ncol = input$ntraject_1_1)
-  })
-
-  output$plot_1_1a <- renderPlot({
-    mu <- input$mu_1_1
-    sigma <- input$sigma_1_1
-    n <- input$n_1_1
-    ntraject <- input$ntraject_1_1
-    alpha <- input$alpha_1_1
-    n_hist_group <- input$n_hist_group_1_1
-    random_matrix <- random_matrix_1_1()
-    a <- input$plot_type_1_1 == "Pontok"
-    if (input$plot_type_1_1 == "Pontok") {
-      p <- ggplot()
-      if (sigma > 0 & n > 1) { # confidence interval
-        p <- p + geom_ribbon(aes(
-          x = c(
-            mu - (qnorm(1 - alpha / 200) * sigma / sqrt(n)),
-            mu + (qnorm(1 - alpha / 200) * sigma / sqrt(n))
-          ),
-          ymin = -Inf, ymax = Inf,
-          fill = "Konfidencia intervallum"
-        ), alpha = .1) +
-          scale_fill_manual(values = c("Konfidencia intervallum" = "#FF5B6B"))
-      }
-
-      p <- p + geom_vline(xintercept = mu, linetype = "dashed", color = "#FF5B6B", size = 1.2) +
-        geom_point(aes(y = seq(from = 0, to = 100, length.out = ntraject), x = colMeans(random_matrix)),
-          fill = "#00A3AB", size = 2, shape = 21, color = "black", stroke = 1, alpha = 0.7
-        )
-
-      p <- p + scale_y_continuous(breaks = NULL) +
-        labs(x = "Mintaátlagok", y = "", title = "Mintaátlagok és konfidenciaintervallum") +
-        theme_minimal() + theme(
-          axis.text.x = element_text(size = 20),
-          plot.title = element_text(size = 20),
-          axis.title.x = element_text(size = 20),
-          legend.position = "bottom",
-          legend.justification = 0.9,
-          legend.title = element_blank(),
-          legend.text = element_text(size = 20),
-          plot.margin = margin(30, 30, 30, 30, "pt")
-        )
-    }
-
-    if (input$plot_type_1_1 == "Hisztogram") {
-      p <- ggplot() +
-        geom_histogram(aes(colMeans(random_matrix)), color = "black", fill = "#52CCBF", bins = n_hist_group) +
-        labs(x = "", y = "", title = "Mintaátlagok hisztogramja") +
-        theme_minimal() +
-        theme(
-          axis.text.x = element_text(size = 20),
-          legend.position = "bottom",
-          legend.justification = 0.9,
-          legend.title = element_blank(),
-          legend.text = element_text(size = 20),
-          plot.margin = margin(30, 30, 30, 30, "pt")
-        )
-    }
-
-    if (input$plot_type_1_1 == "Arányokat megjelenítő hisztogram") {
-      x <- seq(from = min(colMeans(random_matrix)), to = max(colMeans(random_matrix)), length.out = n_hist_group + 1)
-      normalised_his <- table(cut(colMeans(random_matrix),
-        breaks = x, right = F, include.lowest = T
-      )) %>%
-        tibble() %>%
-        mutate(
-          x = (x[-1] + x[1:(length(x) - 1)]) / 2
-        )
-      names(normalised_his) <- c("y", "x")
-      normalised_his <- normalised_his %>%
-        mutate(
-          y = as.numeric(y / sum(y))
-        )
-      diff(normalised_his$x)
-      p <- ggplot() +
-        stat_function(
-          data = data.frame(x = c(
-            min(colMeans(random_matrix)) - min(colMeans(random_matrix)) * 0.1,
-            max(colMeans(random_matrix)) + max(colMeans(random_matrix)) * 0.1
-          )), aes(x = x, fill = "Normál eloszlás"), color = "black",
-          fun = dnorm, args = list(mu, sigma), geom = "area"
-        ) +
-        geom_bar(
-          data = normalised_his, aes(y = y, x = x), stat = "identity", color = "black", alpha = .8,
-          width = x[2] - x[1]
-        ) +
-        labs(x = "", y = "", title = "Arányokat ismertető hisztogram") +
-        scale_fill_manual(values = c("Normál eloszlás" = "#FFC730")) +
-        scale_x_continuous(breaks = round(x, digits = 2)) +
-        theme_minimal() +
-        theme(
-          axis.text.x = element_text(size = 20),
-          plot.title = element_text(size = 20),
-          axis.title.x = element_text(size = 20),
-          legend.position = "bottom",
-          legend.title = element_blank(),
-          legend.text = element_text(size = 20),
-          plot.margin = margin(30, 30, 30, 30, "pt")
-        )
-    }
-    p
-  })
-
-  output$plot_1_1b <- renderPlot({
-    mu <- input$mu_1_1
-    sigma <- input$sigma_1_1
-    n <- input$ n_1_1
-    ntraject <- input$ntraject_1_1
-    alpha <- input$alpha_1_1
-    traject_select <- input$traject_select_1_1
-    n_hist_group <- input$n_hist_group_1_1
-    random_matrix <- random_matrix_1_1()
-
-    p <- ggplot()
-    if (sigma > 0 & n > 1) {
-      p <- p + geom_ribbon(aes(
-        x = c(
-          mu - (qnorm(1 - alpha / 200) * sigma / sqrt(n)),
-          mu + (qnorm(1 - alpha / 200) * sigma / sqrt(n))
-        ),
-        ymin = -Inf, ymax = Inf,
-        fill = "Konfidencia intervallum"
-      ), alpha = .1)
-    }
-
-    p + geom_vline(aes(xintercept = mu, color = "Várható érték"), linetype = "dashed", size = 1.3) +
-      geom_vline(aes(
-        xintercept = mean(as.numeric(random_matrix[, traject_select])),
-        color = "Adott minta átlaga"
-      ), linetype = "dashed", size = 1.3) +
-      geom_point(aes(
-        x = as.numeric(random_matrix[, traject_select]),
-        y = seq(from = 1, to = 100, length.out = n)
-      ),
-      fill = "#52CCBF", size = 4, shape = 21, color = "black", stroke = 2, alpha = 0.7
-      ) +
-      scale_y_continuous(breaks = NULL) +
-      scale_color_manual(values = c(
-        "Adott minta átlaga" = "#52CCBF",
-        "Várható érték" = "#FF5B6B"
-      )) +
-      scale_fill_manual(values = c(
-        "Konfidencia intervallum" = "#FF5B6B"
-      )) +
-      theme_minimal() +
-      theme(
-        legend.position = "bottom",
-        axis.title = element_blank(),
-        legend.title = element_blank(),
-        axis.text.x = element_text(size = 20),
-        legend.justification = 0.9,
-        legend.text = element_text(size = 20),
-        plot.margin = margin(30, 30, 30, 30, "pt")
-      )
-  })
-
-  output$answer_1_1 <- renderText({
-    mu <- input$mu_1_1
-    sigma <- input$sigma_1_1
-    n <- input$n_1_1
-    ntraject <- input$ntraject_1_1
-    alpha <- input$alpha_1_1
-    random_matrix <- random_matrix_1_1()
-
-    if (sigma > 0 & n > 1) {
-      conf_min <- mu - (qnorm(1 - alpha / 200) * sigma / sqrt(n)) # confidence interval
-      conf_max <- mu + (qnorm(1 - alpha / 200) * sigma / sqrt(n))
-      n_conf_out <- sum(colMeans(random_matrix) > conf_max | colMeans(random_matrix) < conf_min)
-      paste(
-        "Alfa = ", scales::percent(alpha / 100), "\n",
-        "Konfidencia intervallum alsó határa = ", round(conf_min, digits = 4), "\n",
-        "Konfidencia intervallum felső határa = ", round(conf_max, digits = 4), "\n",
-        "Konfidencia intervallumon kívül eső átlaggal rendelkező minták száma = ", n_conf_out, "\n",
-        "Konfidencia intervallumon kívül eső átlaggal rendelkező minták aránya = ",
-        scales::percent(n_conf_out / ntraject),
-        sep = ""
-      )
-    } else {
-      "Ezen paraméterekkel konfidencia intervallum nem szerkeszthető."
-    }
-  })
-
+},
+width = 1300,
+height = 1300)
+  
+output$answer_1_1 <- renderText({
+  N <- input$N_1_1
+  n <- input$n_1_1
+  sigma <- input$sigma_1_1
+  m <- input$m_1_1
+  alpha <- input$alpha_1_1
+  mu <- input$mu_1_1
+  mat <- mat_1_1()
+  
+  n_outofconf <- mat %>% data.frame() %>% gather() %>% group_by(key) %>% summarise(mu = mean(value), sigma = sd(value)) %>% 
+    mutate(
+      conf_min = mu - qnorm(1-alpha/200)*sigma/n^0.5,
+      conf_max = mu + qnorm(1-alpha/200)*sigma/n^0.5
+    ) %>% select(-c(mu, sigma)) %>% mutate(
+      inconf = ifelse(conf_min < mu & conf_max > mu, 0, 1)
+    ) %>% pull() %>% sum()
+  str_c(
+    "A(z) ",m, " db mintavétel során összesen ", n_outofconf, " alkalommal volt\na sokassági átlag a mintából számított konfidencia-intervallumon kívül.\n",
+    "(", scales::percent(n_outofconf/m, accuracy = .01), ")"
+  )
+})
 # Server: 2_1 -------------------------------------------------------------
 output$answer_2_1 <- renderText({
 
