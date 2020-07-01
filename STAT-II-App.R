@@ -1,5 +1,5 @@
+# Setup -------------------------------------------------------------------
 library(shiny)
-library(ggplot2)
 library(shinythemes)
 library(tidyverse)
 library(ggpubr)
@@ -10,7 +10,7 @@ ui <- bootstrapPage(
     "Corvinus Statisztika", id = "nav",
     navbarMenu(
       "Bevezetés",
-# ui: 1_1 = conf intervall ------------------------------------------------
+# ui: Konfidencia intervallum ------------------------------------------------
       tabPanel(
         "Konfidencia intervallum",
         tags$head(includeCSS("styles.css")),
@@ -70,7 +70,7 @@ ui <- bootstrapPage(
     ),
     navbarMenu(
       "Becslési eljárások",
-# ui: 2_1 = Prop estimate -----------------------------------------------------------------
+# ui: Sokassági arány becslése -----------------------------------------------------------------
       tabPanel(
         "Arány",
         tags$head(includeCSS("styles.css")),
@@ -92,7 +92,7 @@ ui <- bootstrapPage(
           )
         )
       ),
-# ui: 2_2 = var estimate -----------------------------------------------------------------
+# ui: Variancia becslése -----------------------------------------------------------------
       tabPanel(
         "Variancia",
         tags$head(includeCSS("styles.css")),
@@ -102,8 +102,8 @@ ui <- bootstrapPage(
             numericInput("ssd", "Mintabeli szórás", min = 0, value = 1),
             numericInput("n", "Mintanagyság", min = 0, value = 100),
             sliderInput(
-              "alpha_2_2",
-              "Szignifikanciaszint (%):",
+              "alpha",
+              "Szignifikanciaszint (%)",
               min = 1,
               max = 20,
               value = 5
@@ -124,17 +124,17 @@ ui <- bootstrapPage(
         tags$head(includeCSS("styles.css")),
         sidebarLayout(
           sidebarPanel(
-            span(tags$i(h6("Kétmintás t és Z-próba")), style = "color:#045a8d"),
+            span(tags$i(h6("Kétmintás t és z-próba")), style = "color:#045a8d"),
             selectInput("type", "Bevitel típusa", c("csúszka", "normál bevitel"), selected = "csúszka"),
             selectInput(
               inputId = "test_type",
-              label = "Próbafüggvény:",
+              label = "Próbafüggvény",
               choices = c("t", "z"),
               selected = "t"
             ),
             selectInput(
               inputId = "test_side",
-              label = "Hipotézis megfogalmazása: (jobboldali esetén H1: X-Y eltérés nagyobb, mint a hipozésiben szereplő érték)",
+              label = "Hipotézis megfogalmazása (jobboldali esetén H1: X-Y eltérés nagyobb, mint a hipozésiben szereplő érték)",
               choices = c("jobboldali", "baloldali", "kétoldali"),
               selected = "jobboldali"
             ),
@@ -147,7 +147,7 @@ ui <- bootstrapPage(
             uiOutput("sigma_y"),
             sliderInput(
               "alpha",
-              "Szignifikanciaszint (%):",
+              "Szignifikanciaszint (%)",
               min = 1,
               max = 20,
               value = 5
@@ -222,11 +222,10 @@ ui <- bootstrapPage(
     )
   )
 )
-
 # Server ------------------------------------------------------------------
 server <- function(input, output, session) {
 
-  # Server: 1_1 -------------------------------------------------------------
+# S: Konfidencia intervallum -------------------------------------------------------------
 mat_1_1 <- reactive({
   input$reload
   
@@ -307,12 +306,12 @@ output$answer_1_1 <- renderText({
     "(", scales::percent(n_outofconf/m, accuracy = .01), ")"
   )
 })
-# Server: 2_1 -------------------------------------------------------------
+# S: Sokassági arány becslése -------------------------------------------------------------
 output$answer_2_1 <- renderText({
 
   p <- input$p/100
   n <- input$n
-  alpha <- input$alpha_2_1
+  alpha <- input$alpha
   
   varp <- (p*(1-p))/(n-1)
   sdp <- varp^0.5
@@ -333,10 +332,10 @@ output$answer_2_1 <- renderText({
    
 })
 
-# Server: 2_2 -------------------------------------------------------------
+# S: Variancia becslése -------------------------------------------------------------
 output$answer_2_2 <- renderText({
-  conf_var_min <- (input$n-1)*input$ssd^2/qchisq(1-input$alpha_2_2/200, df = input$n-1)
-  conf_var_max <- (input$n-1)*input$ssd^2/qchisq(input$alpha_2_2/200, df = input$n-1)
+  conf_var_min <- (input$n-1)*input$ssd^2/qchisq(1-input$alpha/200, df = input$n-1)
+  conf_var_max <- (input$n-1)*input$ssd^2/qchisq(input$alpha/200, df = input$n-1)
 
   str_c(
     "Mintabeli szórás = ", round(input$ssd, digits = 4), "\n",
@@ -353,7 +352,7 @@ output$answer_2_2 <- renderText({
     if (input$type == "csúszka") {
       sliderInput(
         "mu",
-        "Feltételezett eltérés: ",
+        "Feltételezett eltérés",
         value = 0,
         min = -100,
         max = 100
@@ -361,7 +360,7 @@ output$answer_2_2 <- renderText({
     } else {
       numericInput(
         "mu",
-        "Feltételezett eltérés: ",
+        "Feltételezett eltérés",
         value = 0
       )
     }
@@ -371,16 +370,16 @@ output$answer_2_2 <- renderText({
     if (input$type == "csúszka") {
       sliderInput(
         "n_x",
-        "x minta elemszáma:",
-        value = 1,
+        "x minta elemszáma",
+        value = 50,
         min = 1,
         max = 200
       )
     } else {
       numericInput(
         "n_x",
-        "x minta elemszáma:",
-        value = 1,
+        "x minta elemszáma",
+        value = 50,
         min = 1
       )
     }
@@ -390,17 +389,17 @@ output$answer_2_2 <- renderText({
     if (input$type == "csúszka") {
       sliderInput(
         "n_y",
-        "y minta elemszáma:",
-        value = 1,
+        "y minta elemszáma",
+        value = 50,
         min = 1,
         max = 200
       )
     } else {
       numericInput(
         "n_y",
-        "y minta elemszáma:",
+        "y minta elemszáma",
         min = 1,
-        value = 1
+        value = 50
       )
     }
   })
@@ -410,7 +409,7 @@ output$answer_2_2 <- renderText({
       sliderInput(
         "mean_x",
         "x minta átlaga",
-        value = 0,
+        value = 15,
         min = -100,
         max = 100
       )
@@ -418,7 +417,7 @@ output$answer_2_2 <- renderText({
       numericInput(
         "mean_x",
         "x minta átlaga",
-        value = 0
+        value = 15
       )
     }
   })
@@ -429,7 +428,7 @@ output$answer_2_2 <- renderText({
       sliderInput(
         "mean_y",
         "y minta átlaga",
-        value = 0,
+        value = 17,
         min = -100,
         max = 100
       )
@@ -437,7 +436,7 @@ output$answer_2_2 <- renderText({
       numericInput(
         "mean_y",
         "y minta átlaga",
-        value = 0
+        value = 17
       )
     }
   })
@@ -447,7 +446,7 @@ output$answer_2_2 <- renderText({
       sliderInput(
         "sigma_x",
         "x minta szórása",
-        value = 0,
+        value = 1,
         min = 0,
         max = 50
       )
@@ -455,7 +454,7 @@ output$answer_2_2 <- renderText({
       numericInput(
         "sigma_x",
         "x minta szórása",
-        value = 0,
+        value = 1,
         min = 0
       )
     }
@@ -466,7 +465,7 @@ output$answer_2_2 <- renderText({
       sliderInput(
         "sigma_y",
         "y minta szórása",
-        value = 0,
+        value = 1,
         min = 0,
         max = 50
       )
@@ -474,7 +473,7 @@ output$answer_2_2 <- renderText({
       numericInput(
         "sigma_y",
         "y minta szórása",
-        value = 0,
+        value = 1,
         min = 0
       )
     }
